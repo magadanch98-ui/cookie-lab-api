@@ -20,6 +20,12 @@ const BT_ENV = (process.env.BT_ENVIRONMENT || "sandbox").toLowerCase();
 const BT_MERCHANT_ID = process.env.BT_MERCHANT_ID || "";
 const BT_PUBLIC_KEY = process.env.BT_PUBLIC_KEY || "";
 const BT_PRIVATE_KEY = process.env.BT_PRIVATE_KEY || "";
+const PAYPAL_MODE = (process.env.PAYPAL_MODE || "sandbox").toLowerCase();
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "";
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || "";
+const PAYPAL_API_BASE = PAYPAL_MODE === "live"
+  ? "https://api-m.paypal.com"
+  : "https://api-m.sandbox.paypal.com";
 const btEnvironment = BT_ENV === "production" ? braintree.Environment.Production : braintree.Environment.Sandbox;
 const btGateway = BT_MERCHANT_ID && BT_PUBLIC_KEY && BT_PRIVATE_KEY
   ? new braintree.BraintreeGateway({
@@ -253,8 +259,8 @@ function getRiskPolicy(mode) {
   if (mode === "strict") {
     return {
       mode: "strict",
-      networkThreshold: 90,
-      declineThreshold: 76,
+      networkThreshold: 86,
+      declineThreshold: 66,
       allowPartialAvs: false,
       requireCvvMatch: true
     };
@@ -262,10 +268,10 @@ function getRiskPolicy(mode) {
 
   return {
     mode: "balanced",
-    networkThreshold: 94,
-    declineThreshold: 88,
-    allowPartialAvs: true,
-    requireCvvMatch: false
+    networkThreshold: 88,
+    declineThreshold: 74,
+    allowPartialAvs: false,
+    requireCvvMatch: true
   };
 }
 
@@ -291,6 +297,36 @@ function toMajorAmountString(amount) {
   const n = Number(amount);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n.toFixed(2);
+}
+
+async function getPayPalAccessToken() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    throw new Error("PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
+  }
+
+  const basic = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64");
+  const resp = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+
+  let data = null;
+  try {
+    data = await resp.json();
+  } catch (error) {
+    data = null;
+  }
+
+  if (!resp.ok || !data?.access_token) {
+    const reason = data?.error_description || data?.error || `PayPal token error (${resp.status})`;
+    throw new Error(reason);
+  }
+
+  return data.access_token;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -720,6 +756,158 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         enabled: Boolean(btGateway),
         environment: BT_ENV
+      });
+      return;
+    }
+
+    if (req.method === "GET" && pathIs("/api/paypal/config", "/paypal/config")) {
+      json(res, 200, {
+        ok: true,
+        enabled: Boolean(PAYPAL_CLIENT_ID && PAYPAL_CLIENT_SECRET),
+        mode: PAYPAL_MODE,
+        api_base: PAYPAL_API_BASE
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathIs("/api/paypal/create-payment", "/paypal/create-payment")) {
+      if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+        json(res, 503, {
+          ok: false,
+          ...statusPayload(
+            "SERVICE_UNAVAILABLE",
+            "PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET."
+          )
+        });
+        return;
+      }
+
+      const body = await parseBody(req);
+      const amount = toMajorAmountString(body.amount);
+      const currency = String(body.currency || "USD").toUpperCase();
+      const description = String(body.description || "Payment description");
+      const returnUrl = String(body.return_url || "http://localhost/success");
+      const cancelUrl = String(body.cancel_url || "http://localhost/cancel");
+      const intent = String(body.intent || "sale").toLowerCase();
+
+      if (!amount) {
+        json(res, 400, { ok: false, ...statusPayload("INVALID_REQUEST", "Invalid amount") });
+        return;
+      }
+
+      if (!/^[A-Z]{3}$/.test(currency)) {
+        json(res, 400, { ok: false, ...statusPayload("INVALID_FORMAT", "Invalid currency format") });
+        return;
+      }
+
+      const accessToken = await getPayPalAccessToken();
+      const paymentResp = await fetch(`${PAYPAL_API_BASE}/v1/payments/payment`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          intent: ["sale", "authorize", "order"].includes(intent) ? intent : "sale",
+          payer: {
+            payment_method: "paypal"
+          },
+          redirect_urls: {
+            return_url: returnUrl,
+            cancel_url: cancelUrl
+          },
+          transactions: [
+            {
+              amount: {
+                total: amount,
+                currency
+              },
+              description
+            }
+          ]
+        })
+      });
+
+      let paymentData = null;
+      try {
+        paymentData = await paymentResp.json();
+      } catch (error) {
+        paymentData = null;
+      }
+
+      if (!paymentResp.ok || !paymentData?.id) {
+        const reason = paymentData?.message || paymentData?.name || `PayPal create payment error (${paymentResp.status})`;
+        json(res, 402, { ok: false, ...statusPayload("PROCESSOR_ERROR", reason), raw: paymentData || null });
+        return;
+      }
+
+      const approvalUrl = Array.isArray(paymentData.links)
+        ? paymentData.links.find((link) => link?.rel === "approval_url")?.href || null
+        : null;
+
+      json(res, 200, {
+        ok: true,
+        ...statusPayload("PENDING", "paypal_payment_created"),
+        payment_id: paymentData.id,
+        state: paymentData.state,
+        intent: paymentData.intent,
+        approval_url: approvalUrl,
+        raw: paymentData
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathIs("/api/paypal/execute-payment", "/paypal/execute-payment")) {
+      if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+        json(res, 503, {
+          ok: false,
+          ...statusPayload(
+            "SERVICE_UNAVAILABLE",
+            "PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET."
+          )
+        });
+        return;
+      }
+
+      const body = await parseBody(req);
+      const paymentId = String(body.payment_id || "").trim();
+      const payerId = String(body.payer_id || "").trim();
+      if (!paymentId || !payerId) {
+        json(res, 400, { ok: false, ...statusPayload("MISSING_FIELDS", "payment_id and payer_id are required") });
+        return;
+      }
+
+      const accessToken = await getPayPalAccessToken();
+      const execResp = await fetch(`${PAYPAL_API_BASE}/v1/payments/payment/${encodeURIComponent(paymentId)}/execute`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ payer_id: payerId })
+      });
+
+      let execData = null;
+      try {
+        execData = await execResp.json();
+      } catch (error) {
+        execData = null;
+      }
+
+      if (!execResp.ok) {
+        const reason = execData?.message || execData?.name || `PayPal execute error (${execResp.status})`;
+        json(res, 402, { ok: false, ...statusPayload("PROCESSOR_ERROR", reason), raw: execData || null });
+        return;
+      }
+
+      const state = String(execData?.state || "").toLowerCase();
+      const approved = state === "approved";
+      json(res, 200, {
+        ok: approved,
+        ...statusPayload(approved ? "APPROVED" : "PENDING", "paypal_payment_executed"),
+        payment_id: execData?.id || paymentId,
+        state: execData?.state || null,
+        raw: execData
       });
       return;
     }

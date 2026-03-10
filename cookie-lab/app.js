@@ -57,7 +57,7 @@ let lab = null;
 let history = [];
 let isGenerating = false;
 let selectedGate = "amazon";
-let flowMode = "amazon-cookies";
+let flowMode = "gate-auth";
 let lastCookieGenerationAt = 0;
 const stats = {
   live: 0,
@@ -101,6 +101,9 @@ const MIN_DELAY = 40000;
 const MAX_DELAY = 60000;
 const MAX_VERIFIER_USES = 6;
 const MAX_FAILED_ATTEMPTS = 3;
+const API_MIN_PROCESS_DELAY_MS = 1200;
+const API_MAX_PROCESS_DELAY_MS = 2200;
+const API_RETRY_BACKOFF_MS = 3500;
 
 const RCODES = {
   success: [
@@ -279,7 +282,7 @@ function randomInt(min, max) {
 }
 
 function buildGeneratedCardsFromConfig(config) {
-  const rawBinInput = String(config.binInput || "").trim();
+  const rawBinInput = Stnecesitoring(config.binInput || "").trim();
   const binPattern = rawBinInput.toLowerCase().replace(/[^0-9x]/g, "");
   const numericBin = rawBinInput.replace(/\D/g, "");
   const hasWildcardPattern = /x/i.test(rawBinInput);
@@ -707,6 +710,84 @@ function updJob(jobId, status, detail = "") {
   showQueue();
 }
 
+function getGateLabel(gate) {
+  if (gate === "amazon") return "Amazon";
+  if (gate === "paypal") return "PayPal";
+  if (gate === "fwgates") return "Braintree";
+  return "General";
+}
+
+function parseJobOutcome(job) {
+  const detail = String(job?.detail || "");
+  const statusMatch = detail.match(/\[([A-Z0-9_]+)\]/);
+  const status = statusMatch ? statusMatch[1] : "";
+  const last4Match = detail.match(/(\d{4})(?!.*\d)/);
+  const last4 = last4Match ? last4Match[1] : "----";
+  const message = detail
+    .replace(/^\[[^\]]+\]\s*/, "")
+    .replace(/\s*-\s*\d{4}\s*$/, "")
+    .trim();
+
+  return {
+    status,
+    last4,
+    message: message || getMsg(status || job?.status || "UNKNOWN")
+  };
+}
+
+function renderResultColumnsByGate() {
+  const liveEl = document.getElementById("state");
+  const deadEl = document.getElementById("walletAssocResult");
+  const errEl = document.getElementById("verifierStatus");
+  if (!liveEl || !deadEl || !errEl) return;
+
+  const doneJobs = queueState.items.filter((item) => ["live", "dead", "error"].includes(item.status));
+  const liveJobs = doneJobs.filter((item) => item.status === "live");
+  const deadJobs = doneJobs.filter((item) => item.status === "dead");
+  const errJobs = doneJobs.filter((item) => item.status === "error");
+  const gateLabel = getGateLabel(selectedGate);
+  const liveTag = selectedGate === "amazon" ? "AUTH" : "VERIFIED";
+
+  if (!liveJobs.length) {
+    liveEl.textContent = `Gate: ${gateLabel}\nSin aprobadas por ahora.`;
+  } else {
+    liveEl.textContent = [
+      `Gate: ${gateLabel}`,
+      `Aprobadas: ${liveJobs.length}`,
+      ...liveJobs.slice(0, 80).map((job) => {
+        const info = parseJobOutcome(job);
+        return `Card ****${info.last4} | Aprobada ${liveTag} | ${info.message}`;
+      })
+    ].join("\n");
+  }
+
+  if (!deadJobs.length) {
+    deadEl.textContent = `Gate: ${gateLabel}\nSin declinadas por ahora.`;
+  } else {
+    deadEl.textContent = [
+      `Gate: ${gateLabel}`,
+      `Declinadas: ${deadJobs.length}`,
+      ...deadJobs.slice(0, 80).map((job) => {
+        const info = parseJobOutcome(job);
+        return `Card ****${info.last4} | Declinada | ${info.message}`;
+      })
+    ].join("\n");
+  }
+
+  if (!errJobs.length) {
+    errEl.textContent = `Gate: ${gateLabel}\nSin errores por ahora.`;
+  } else {
+    errEl.textContent = [
+      `Gate: ${gateLabel}`,
+      `Errores: ${errJobs.length}`,
+      ...errJobs.slice(0, 80).map((job) => {
+        const info = parseJobOutcome(job);
+        return `Card ****${info.last4} | Error | ${info.message}`;
+      })
+    ].join("\n");
+  }
+}
+
 function setPreset() {
   const mode = document.getElementById("gatePreset")?.value || "auto";
   const batchEl = document.getElementById("batchSize");
@@ -830,6 +911,13 @@ function updGate() {
 function initQuick() {
   const quickSelect = document.getElementById("gatewayQuickSelect");
   if (!quickSelect) return;
+
+  // Reconstruye opciones para evitar duplicados por cache o HTML desactualizado.
+  quickSelect.innerHTML = [
+    '<option value="amazon">Stripe Gate (Amazon)</option>',
+    '<option value="paypal">PayPal Gate</option>',
+    '<option value="fwgates">Braintree Gate</option>'
+  ].join("");
 
   if (["amazon", "paypal", "fwgates"].includes(selectedGate)) {
     quickSelect.value = selectedGate;
@@ -974,7 +1062,7 @@ function updateVerifierStatusPanel() {
 
   verifierEl.textContent = [
     `Gate: ${selectedGate}`,
-    `Modo API: ${lab.api_mode || "local"}`,
+    `Modo API: ${lab.api_mode?.enabled ? "api" : "local"}`,
     `Cookie: ${lab.cookies?.cookie_state || "active"}`,
     `Ultimo estado: ${lab.wallet_association_test?.association?.status || lab.wallet_association_test?.status || "N/A"}`,
     `Ultimo mensaje: ${lab.wallet_association_test?.association?.status_message || "N/A"}`
@@ -1097,6 +1185,53 @@ function normalizeSafeStatus(rawStatus, reason, context = {}) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomBetween(min, max) {
+  const safeMin = Math.max(0, Number(min) || 0);
+  const safeMax = Math.max(safeMin, Number(max) || safeMin);
+  return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
+}
+
+function getApiProcessDelayByGate(gate) {
+  if (gate === "amazon") return randomBetween(900, 1500);
+  if (gate === "paypal") return randomBetween(1400, 2400);
+  if (gate === "fwgates") return randomBetween(1500, 2600);
+  return randomBetween(API_MIN_PROCESS_DELAY_MS, API_MAX_PROCESS_DELAY_MS);
+}
+
+function isTrustedApiApproval(gate, apiStatus, apiDecision) {
+  const status = String(apiStatus || "").toUpperCase();
+  if (!SUCCESS_STATUS_SET.has(status)) return false;
+  if (!apiDecision || typeof apiDecision !== "object") return false;
+
+  const risk = Number(apiDecision.risk_score);
+  const avs = String(apiDecision.avs || "").toLowerCase();
+  const cvv = String(apiDecision.cvv || "").toLowerCase();
+  const network = String(apiDecision.network || "").toLowerCase();
+
+  if (!Number.isFinite(risk)) return false;
+  if (network && network !== "ok") return false;
+  if (avs && avs === "mismatch") return false;
+  if (cvv && cvv !== "match") return false;
+
+  const limitByGate = {
+    amazon: 62,
+    paypal: 58,
+    fwgates: 64
+  };
+  const limit = limitByGate[gate] ?? 60;
+  return risk <= limit;
+}
+
+function isTooSoonReason(reason) {
+  const text = String(reason || "").toLowerCase();
+  return (
+    text.includes("too soon") ||
+    text.includes("please wait") ||
+    text.includes("rate") ||
+    text.includes("velocity")
+  );
 }
 
 function formatCooldownRemaining(ms) {
@@ -1823,16 +1958,20 @@ function computeGateValidation(labState, gate, context = {}) {
   const usagePenalty = Math.round(usagePressure * 24);
   const formatPenalty = formatValid ? 0 : 24;
   const luhnPenalty = context.cardValid === false ? 18 : 0;
+  const cardDigits = String(context.cardNumber || "").replace(/\D/g, "");
+  const cardTail = cardDigits ? Number(cardDigits.slice(-4)) : 0;
+  const cardRisk = cardDigits ? cardTail % 100 : 50;
+  const cardRiskPenalty = Math.round(cardRisk * 0.35);
 
   const cookieScore = Math.max(
     0,
-    100 - stalePenalty - failPenalty - usagePenalty - formatPenalty - luhnPenalty
+    100 - stalePenalty - failPenalty - usagePenalty - formatPenalty - luhnPenalty - cardRiskPenalty
   );
 
   const riskScore = Math.min(
     99,
     Math.round(
-      100 - cookieScore + failCount * 7 + usagePressure * 20 + (context.apiEnabled ? 3 : 7)
+      100 - cookieScore + failCount * 7 + usagePressure * 20 + (context.apiEnabled ? 3 : 7) + Math.round(cardRisk * 0.25)
     )
   );
   const riskRatio = riskScore / 100;
@@ -1940,18 +2079,10 @@ function updateUI() {
   if (assocEl) {
     if (!lab.wallet_association_test) {
       assocEl.textContent = "Aun no se ha ejecutado una prueba de asociacion.";
-    } else {
-      const assoc = lab.wallet_association_test.association || {};
-      assocEl.textContent = [
-        "Resultado de asociacion",
-        `Estado: ${assoc.status || lab.wallet_association_test.status || "N/A"}`,
-        `Mensaje: ${assoc.status_message || "N/A"}`,
-        `Razon: ${assoc.reason || "N/A"}`,
-        `Cobro real: ${lab.wallet_association_test.no_charge ? "No" : "Si"}`
-      ].join("\n");
     }
   }
 
+  renderResultColumnsByGate();
   updateVerifierStatusPanel();
 }
 
@@ -2196,14 +2327,72 @@ async function ensureGateApiSession() {
     riskModeEl.value = getDefaultRiskModeByGate(selectedGate);
   }
 
-  const ok = await runLab({ fast: true, fastDelayMs: 700, disableButtons: false, skipCooldown: true });
-  if (!ok) return false;
+  const region = document.getElementById("region")?.value || DEFAULT_REGION;
+  const alias = "Wallet Principal";
+  const profile = regions[region] || regions[DEFAULT_REGION];
 
-  if (!lab?.api_mode?.enabled) {
-    setStatus("Gate API no pudo abrir sesion/wallet para validar tarjetas.", "running");
-    log("API", "Sesion API no habilitada en modo Gate Auth");
+  const sessionResp = await createApiSimulationSession(region);
+  if (!sessionResp.ok || !sessionResp.data?.ok || !sessionResp.data?.cookie) {
+    setStatus("Gate API no pudo crear sesion de validacion.", "running");
+    log("API", `Sesion API falló: ${sessionResp.data?.reason || "request_failed"}`);
     return false;
   }
+
+  const simCookie = sessionResp.data.cookie;
+  const walletResp = await openApiWallet(simCookie, alias);
+  if (!walletResp.ok || !walletResp.data?.ok || !walletResp.data?.wallet?.wallet_id) {
+    setStatus("Gate API no pudo abrir wallet de validacion.", "running");
+    log("API", `Wallet API falló: ${walletResp.data?.reason || "request_failed"}`);
+    return false;
+  }
+
+  const wallet = walletResp.data.wallet;
+  const source = createSource();
+  source.source_state = "source_linked";
+
+  // Para chequeo de tarjetas en Gate Auth no se requiere cookie pegada por usuario.
+  lab = {
+    profile,
+    wallet,
+    source,
+    cookies: {
+      sim_cookie: simCookie,
+      cookie_state: "active",
+      last_seen: Date.now()
+    },
+    cookie_format: "amazon_like",
+    cookie_output: "",
+    cookie_validation: { ok: true, reason: "gate_api_session" },
+    verifier: {
+      uses: 0,
+      failed_attempts: 0,
+      max_uses: MAX_VERIFIER_USES,
+      max_failed_attempts: MAX_FAILED_ATTEMPTS,
+      blocked: false,
+      dead: false,
+      last_event: "created"
+    },
+    api_mode: {
+      enabled: true,
+      simulation_only: true,
+      no_charge: true,
+      api_base: sessionResp.base,
+      cookie: simCookie,
+      wallet_id: wallet.wallet_id,
+      policy: sessionResp.data.policy,
+      key_profile: sessionResp.data.key_profile
+    },
+    gate: selectedGate,
+    lab_state: "session_active"
+  };
+
+  updateUI();
+  pushHistory("GATE_API_SESSION", {
+    gate: selectedGate,
+    wallet_id: wallet.wallet_id,
+    api_base: sessionResp.base
+  });
+  log("API", `Sesion Gate API lista para ${selectedGate.toUpperCase()}`);
 
   return true;
 }
@@ -2340,8 +2529,16 @@ async function copyFormattedCookie() {
 
 async function runWalletAssociationTest(cardOverride = null) {
   if (!lab) {
-    setStatus("Primero genera la cookie/laboratorio para ejecutar la asociacion.", "running");
-    return "NO_SESSION";
+    if (selectedGate === "amazon") {
+      setStatus("Para Amazon necesitas cargar o generar cookie antes de validar.", "running");
+      return "NO_SESSION";
+    }
+
+    const ready = await ensureGateApiSession();
+    if (!ready) {
+      setStatus("No se pudo abrir sesion API para validar tarjetas.", "running");
+      return "NO_SESSION";
+    }
   }
 
   if (!lab.verifier) {
@@ -2382,12 +2579,6 @@ async function runWalletAssociationTest(cardOverride = null) {
     amazon: "amazon_like_no_cvv_mock",
     paypal: "paypal_tokenized_mock",
     fwgates: "fw_custom_rules_mock"
-  };
-
-  const rejectChanceByGate = {
-    amazon: 0.35,
-    paypal: 0.42,
-    fwgates: 0.3
   };
 
   const activeWallet = {
@@ -2505,19 +2696,27 @@ async function runWalletAssociationTest(cardOverride = null) {
     return invalidStatus;
   }
 
-  const rejectChance = rejectChanceByGate[selectedGate] ?? 0.35;
   const gateEvalPreview = computeGateValidation(lab, selectedGate, {
     cardValid,
+    cardNumber,
     apiEnabled: Boolean(lab.api_mode?.enabled)
   });
-  const randomPass = Math.random() > rejectChance;
-  const shouldAuthorize = cardValid && randomPass && gateEvalPreview.decision === "AUTHORIZED";
+  const shouldAuthorize = cardValid && gateEvalPreview.decision === "AUTHORIZED";
 
   const apiEnabled = Boolean(lab.api_mode?.enabled && lab.api_mode?.cookie && lab.api_mode?.wallet_id);
 
   if (apiEnabled) {
     try {
-      const resp = await associateApiCard(lab.api_mode.cookie, lab.api_mode.wallet_id, cardNumber);
+      // Da tiempo real al flujo remoto para evitar rechazos por carrera/rate.
+      await sleep(getApiProcessDelayByGate(selectedGate));
+
+      let resp = await associateApiCard(lab.api_mode.cookie, lab.api_mode.wallet_id, cardNumber);
+      if ((!resp.ok || !resp.data?.ok) && isTooSoonReason(resp.data?.reason || resp.data?.status_message)) {
+        log("API", "API rate/velocity detectado, reintentando con backoff...");
+        await sleep(API_RETRY_BACKOFF_MS);
+        resp = await associateApiCard(lab.api_mode.cookie, lab.api_mode.wallet_id, cardNumber);
+      }
+
       const ok = Boolean(resp.data?.ok);
       const incomingStatus = resp.data?.status_code || resp.data?.result || (ok ? "AUTHORIZED" : "REJECTED");
       const normalizedIncomingStatus = normalizeSafeStatus(incomingStatus, resp.data?.reason, {
@@ -2527,15 +2726,23 @@ async function runWalletAssociationTest(cardOverride = null) {
       });
       const gateEval = computeGateValidation(lab, selectedGate, {
         cardValid,
+        cardNumber,
         apiEnabled: true
       });
       const apiDecision = resp.data?.decision || null;
       const apiAccepted = SUCCESS_STATUS_SET.has(normalizedIncomingStatus);
-      const finalStatus = apiAccepted && gateEval.decision === "AUTHORIZED"
+      const trustedApproved = isTrustedApiApproval(selectedGate, normalizedIncomingStatus, apiDecision);
+      const declineReason = !apiAccepted
+        ? resp.data?.reason || incomingStatus || "association_failed"
+        : !trustedApproved
+          ? "risk_policy_decline"
+          : gateEval.reason || "risk_declined";
+
+      const finalStatus = apiAccepted && trustedApproved && gateEval.decision === "AUTHORIZED"
         ? resolveSuccessStatus(selectedGate, true)
         : normalizeSafeStatus(
           "REJECTED",
-          gateEval.reason || resp.data?.reason || "association_failed",
+          declineReason,
           {
             gate: selectedGate,
             apiEnabled: true,
@@ -2770,44 +2977,41 @@ async function startCardValidation() {
     return;
   }
 
-  if (flowMode === "gate-auth") {
+  if (selectedGate === "amazon") {
+    if (!lab) {
+      const loaded = loadPastedCookie();
+      if (!loaded) {
+        await runLab({ fast: true, fastDelayMs: 700, disableButtons: false, skipCooldown: true });
+      }
+    }
+
+    if (lab) {
+      if (!lab.wallet?.wallet_id) {
+        lab.wallet = createWallet("Wallet Principal");
+        lab.wallet.wallet_state = "wallet_active";
+      }
+      if (!lab.source?.source_id) {
+        lab.source = createSource();
+        lab.source.source_state = "source_linked";
+      }
+      if (!lab.api_mode) {
+        lab.api_mode = {
+          enabled: false,
+          external_cookie_mode: true,
+          reason: "Modo Amazon con cookie local"
+        };
+      }
+      log("VALIDATION", "Amazon listo: validando con cookie local (sin dependencia de API)");
+    }
+
+    if (!lab || !lab.cookies) {
+      setStatus("Primero genera o carga una cookie Amazon antes de validar tarjetas.", "running");
+      log("VALIDATION", "Error: No hay cookie disponible para Amazon");
+      return;
+    }
+  } else {
     const ready = await ensureGateApiSession();
     if (!ready) return;
-  }
-
-  if (flowMode === "amazon-cookies" && !lab) {
-    const loaded = loadPastedCookie();
-    if (!loaded) {
-      // En validacion Amazon, la preparacion de sesion no debe frenarse por cooldown.
-      await runLab({ fast: true, fastDelayMs: 700, disableButtons: false, skipCooldown: true });
-    }
-  }
-
-  if (flowMode === "amazon-cookies" && lab) {
-    // Normaliza estructura minima para poder emular asociacion a wallet siempre.
-    if (!lab.wallet?.wallet_id) {
-      lab.wallet = createWallet("Wallet Principal");
-      lab.wallet.wallet_state = "wallet_active";
-    }
-    if (!lab.source?.source_id) {
-      lab.source = createSource();
-      lab.source.source_state = "source_linked";
-    }
-    if (!lab.api_mode) {
-      lab.api_mode = {
-        enabled: false,
-        external_cookie_mode: true,
-        reason: "Modo emulado local para asociacion a wallet"
-      };
-    }
-    log("VALIDATION", "Conexion emulada lista: wallet/source preparados en modo Amazon");
-  }
-  
-  // Verificar que hay cookie disponible (generada o pegada)
-  if (!lab || !lab.cookies) {
-    setStatus("Primero genera o carga una cookie Amazon antes de validar tarjetas.", "running");
-    log("VALIDATION", "Error: No hay cookie disponible");
-    return;
   }
   
   // Verificar que hay tarjetas para validar
@@ -2818,7 +3022,10 @@ async function startCardValidation() {
     return;
   }
   
-  log("VALIDATION", `Iniciando validación con ${cardsCheck.cards.length} tarjetas usando cookie existente`);
+  log(
+    "VALIDATION",
+    `Iniciando validación con ${cardsCheck.cards.length} tarjetas para gate ${selectedGate}`
+  );
   
   checker.running = true;
   checker.stopRequested = false;
@@ -2857,7 +3064,9 @@ async function startCardValidation() {
       );
       
       // Delay entre validaciones
-      const delayMs = Math.max(0, Number(document.getElementById("loopDelayMs")?.value || 500));
+      const userDelayMs = Number(document.getElementById("loopDelayMs")?.value || 500);
+      const minGateDelayMs = selectedGate === "amazon" ? 500 : 1500;
+      const delayMs = Math.max(minGateDelayMs, Number.isFinite(userDelayMs) ? userDelayMs : minGateDelayMs);
       if (delayMs > 0 && i < cardsCheck.cards.length - 1) {
         await sleep(delayMs);
       }
@@ -3226,7 +3435,7 @@ async function connectGateApi() {
 
 function initFlowMode() {
   const saved = localStorage.getItem(FLOW_KEY);
-  setFlowMode(saved === "gate-auth" ? "gate-auth" : "amazon-cookies");
+  setFlowMode(saved === "amazon-cookies" ? "amazon-cookies" : "gate-auth");
 
   const publicGateSelect = document.getElementById("publicGateSelect");
   if (publicGateSelect) {

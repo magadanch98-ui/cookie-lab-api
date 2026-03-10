@@ -44,6 +44,10 @@ Payment auth (test/sandbox):
 - Stripe:
   - `GET /api/stripe/config`
   - `POST /api/stripe/create-intent`
+- PayPal REST:
+  - `GET /api/paypal/config`
+  - `POST /api/paypal/create-payment`
+  - `POST /api/paypal/execute-payment`
 - Braintree:
   - `GET /api/braintree/config`
   - `POST /api/braintree/client-token`
@@ -59,9 +63,41 @@ Environment variables:
   - `BT_MERCHANT_ID`
   - `BT_PUBLIC_KEY`
   - `BT_PRIVATE_KEY`
+- PayPal REST:
+  - `PAYPAL_MODE` (`sandbox` or `live`)
+  - `PAYPAL_CLIENT_ID`
+  - `PAYPAL_CLIENT_SECRET`
 - Owner auth (optional, defaults provided):
   - `OWNER_USER`
   - `OWNER_PASS`
+
+## PayPal example (based on v1/payments)
+
+Create payment:
+
+```bash
+curl -X POST "https://your-api-host.tld/api/paypal/create-payment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "intent": "sale",
+    "amount": 10,
+    "currency": "USD",
+    "description": "Payment description",
+    "return_url": "http://localhost/success",
+    "cancel_url": "http://localhost/cancel"
+  }'
+```
+
+Execute approved payment:
+
+```bash
+curl -X POST "https://your-api-host.tld/api/paypal/execute-payment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "payment_id": "PAY-...",
+    "payer_id": "..."
+  }'
+```
 
 ## Frontend on Hosting (non-local API)
 
