@@ -5,6 +5,7 @@
   "type": "commonjs",
   "dependencies": {
     "braintree": "^3.31.0",
+    "dotenv": "^17.3.1",
     "stripe": "^18.5.0"
   },
   "scripts": {
