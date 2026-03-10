@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: cookie-lab-api
+    runtime: node
+    rootDir: cookie-lab/api
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: OWNER_USER
+        sync: false
+      - key: OWNER_PASS
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: BT_ENVIRONMENT
+        sync: false
+      - key: BT_MERCHANT_ID
+        sync: false
+      - key: BT_PUBLIC_KEY
+        sync: false
+      - key: BT_PRIVATE_KEY
+        sync: false

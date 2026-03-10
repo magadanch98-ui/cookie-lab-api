@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo Lab</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Local Demo Lab</h1>
+
+    <div class="topbar">
+      <label for="region">Region para generar cookies:</label>
+      <select id="region">
+        <option value="MX">Mexico</option>
+        <option value="US">Estados Unidos</option>
+        <option value="ES">Espana</option>
+        <option value="IT">Italia</option>
+        <option value="CA">Canada</option>
+      </select>
+      <span id="bridgeBadge" class="bridge-badge">BRIDGE: --</span>
+      <button id="runLabBtn" type="button">Generar cookies</button>
+    </div>
+
+    <section class="grid">
+      <article class="panel">
+        <h3>Perfil Regional</h3>
+        <pre id="profilePanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Billing Address</h3>
+        <pre id="billingPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Add Card</h3>
+        <pre id="cardPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Add Payment Method</h3>
+        <pre id="paymentMethodPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Payment Methods</h3>
+        <pre id="paymentMethodsPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Save Card</h3>
+        <pre id="savedCardPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Wallet</h3>
+        <pre id="walletPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Source</h3>
+        <pre id="sourcePanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Cookie Generator</h3>
+        <pre id="cookiesPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Session Automation</h3>
+        <pre id="sessionPanel"></pre>
+      </article>
+
+      <article class="panel">
+        <h3>Event History</h3>
+        <ol id="historyPanel" class="history-list"></ol>
+      </article>
+
+      <article class="panel panel-wide">
+        <h3>Estado Completo</h3>
+        <pre id="state"></pre>
+      </article>
+
+      <article class="panel panel-wide">
+        <h3>Cookie String</h3>
+        <pre id="cookiesRaw"></pre>
+      </article>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

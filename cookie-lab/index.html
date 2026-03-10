@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="elite-api-base" content="https://TU-SERVICIO.onrender.com">
+<title>Elite Signal Chk - Simulation Dashboard</title>
+<style>
+:root {
+  --bg-a: #0a1226;
+  --bg-b: #1d1f3f;
+  --panel: rgba(16, 28, 49, 0.84);
+  --line: rgba(83, 200, 130, 0.32);
+  --line-soft: rgba(99, 140, 189, 0.24);
+  --txt: #d8ecff;
+  --muted: #8da9c6;
+  --green: #4ade80;
+  --cyan: #63c7ff;
+  --red: #fb7185;
+  --amber: #fbbf24;
+  --scroll-track: rgba(11, 20, 37, 0.9);
+  --scroll-thumb: rgba(99, 199, 255, 0.55);
+  --scroll-thumb-hover: rgba(74, 222, 128, 0.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  color: var(--txt);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(74, 222, 128, 0.12), transparent 24%),
+    radial-gradient(circle at 88% 80%, rgba(129, 140, 248, 0.16), transparent 30%),
+    linear-gradient(135deg, var(--bg-a), var(--bg-b));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--scroll-thumb), rgba(99, 140, 189, 0.78));
+  border-radius: 999px;
+  border: 2px solid var(--scroll-track);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--scroll-thumb-hover), var(--scroll-thumb));
+}
+
+.wrap {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.panel {
+  background: linear-gradient(135deg, var(--panel), rgba(21, 30, 56, 0.9));
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+}
+
+.header {
+  padding: 18px;
+  border: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 31px;
+  font-weight: 900;
+  color: var(--green);
+}
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.chip {
+  border: 1px solid rgba(99, 140, 189, 0.35);
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chip.good { color: var(--green); border-color: rgba(74, 222, 128, 0.45); }
+
+.chip.warn { color: var(--amber); border-color: rgba(251, 191, 36, 0.45); }
+
+.chip.imported { color: var(--green); border-color: rgba(74, 222, 128, 0.5); }
+
+.role-switch {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(99, 140, 189, 0.35);
+  background: rgba(10, 20, 40, 0.72);
+}
+
+.role-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(99, 140, 189, 0.28);
+  background: rgba(13, 21, 38, 0.88);
+  color: #cfe6ff;
+  font-size: 12px;
+}
+
+.role-btn.active {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: var(--green);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2) inset;
+}
+
+.role-hidden {
+  display: none !important;
+}
+
+.flow-hidden {
+  display: none !important;
+}
+
+.flow-switch {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(99, 140, 189, 0.26);
+  border-radius: 12px;
+  background: rgba(8, 16, 30, 0.72);
+}
+
+.flow-btn {
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(99, 140, 189, 0.32);
+  background: rgba(13, 21, 38, 0.88);
+  color: #cfe6ff;
+  font-size: 12px;
+}
+
+.flow-btn.active {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: var(--green);
+}
+
+.menu-shell {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(99, 140, 189, 0.26);
+  border-radius: 12px;
+  background: rgba(8, 16, 30, 0.72);
+  display: grid;
+  gap: 10px;
+}
+
+.menu-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.menu-title {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.menu-controls {
+  display: grid;
+  grid-template-columns: 1.2fr auto auto;
+  gap: 8px;
+  width: 100%;
+}
+
+.menu-controls select {
+  min-width: 170px;
+}
+
+.menu-badge {
+  font-size: 12px;
+  color: #b8d6f0;
+  border: 1px solid rgba(99, 140, 189, 0.28);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: rgba(11, 20, 37, 0.55);
+}
+
+.section-title {
+  margin: 14px 0 10px;
+  font-weight: 800;
+  color: var(--green);
+  letter-spacing: 0.02em;
+}
+
+.gates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gate {
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(13, 21, 38, 0.65);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.gate:hover {
+  transform: translateY(-1px);
+  border-color: rgba(99, 140, 189, 0.45);
+}
+
+.gate.active {
+  border-color: rgba(74, 222, 128, 0.65);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.25) inset;
+}
+
+.gate h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.gate p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mini-status {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--green);
+}
+
+.progress-block {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 12px;
+  background: rgba(8, 15, 29, 0.6);
+}
+
+.progress-line {
+  height: 34px;
+  border: 1px solid rgba(99, 140, 189, 0.35);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  font-size: 12px;
+  color: #cfe6ff;
+  background: linear-gradient(90deg, rgba(43, 64, 97, 0.45), rgba(31, 45, 77, 0.5));
+  position: relative;
+  overflow: hidden;
+  padding: 0 10px;
+}
+
+.progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.35), rgba(34, 197, 94, 0.25));
+  transition: width 0.25s ease;
+}
+
+#processStatus,
+#progressCounter {
+  position: relative;
+  z-index: 1;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.stat {
+  padding: 14px;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  background: rgba(9, 19, 35, 0.6);
+}
+
+.stat .value { font-size: 29px; font-weight: 900; margin-top: 4px; }
+.stat.live .value { color: var(--green); }
+.stat.dead .value { color: var(--red); }
+.stat.err .value { color: var(--amber); }
+.stat.spd .value { color: var(--cyan); }
+.stat .label { font-size: 11px; color: var(--muted); }
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.controls.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-start { background: linear-gradient(135deg, #4ade80, #22c55e); }
+.btn-stop { background: linear-gradient(135deg, #f43f5e, #dc2626); }
+.btn-clear { background: linear-gradient(135deg, #4f9efc, #2563eb); }
+.btn-alt { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+
+.content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.content.gate-layout {
+  grid-template-columns: 1fr;
+}
+
+.content > .panel.card,
+.content > .stack > .panel.card {
+  height: 100%;
+}
+
+.card {
+  padding: 16px;
+}
+
+.card h3 {
+  margin: 0 0 12px;
+  color: var(--green);
+  font-size: 28px;
+}
+
+.card-subtitle {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stack {
+  display: grid;
+  gap: 16px;
+}
+
+.group {
+  margin-bottom: 12px;
+}
+
+label {
+  font-size: 12px;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 5px;
+}
+
+input, select, textarea {
+  width: 100%;
+  border: 1px solid rgba(99, 140, 189, 0.32);
+  background: rgba(10, 20, 40, 0.78);
+  color: #d8ecff;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+textarea { min-height: 120px; resize: vertical; }
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.actions.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#stripeCardElement {
+  border: 1px solid rgba(99, 140, 189, 0.32);
+  background: rgba(10, 20, 40, 0.78);
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 42px;
+}
+
+#btDropin {
+  border: 1px solid rgba(99, 140, 189, 0.32);
+  background: rgba(10, 20, 40, 0.78);
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 42px;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.results.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.result-box {
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(9, 19, 35, 0.5);
+}
+
+.result-box h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+pre {
+  margin: 0;
+  min-height: 100px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "Consolas", monospace;
+  font-size: 12px;
+  color: #cfe6ff;
+}
+
+#cookieFormatted {
+  min-height: 220px;
+  white-space: pre;
+}
+
+.copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.copy-status,
+.validation-status,
+#processStatus {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.validation-status.ok { color: var(--green); }
+.validation-status.bad { color: #fca5a5; }
+
+.note {
+  margin-bottom: 16px;
+  border: 1px dashed rgba(99, 140, 189, 0.4);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 12px;
+  color: #b8d6f0;
+  background: rgba(9, 18, 36, 0.55);
+}
+
+.quick-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.guide-step {
+  border: 1px solid rgba(99, 140, 189, 0.28);
+  border-radius: 12px;
+  background: rgba(8, 16, 30, 0.55);
+  padding: 10px;
+}
+
+.guide-step b {
+  display: block;
+  margin-bottom: 4px;
+  color: #b2f4cc;
+  font-size: 12px;
+}
+
+.guide-step span {
+  font-size: 12px;
+  color: #a7c7e8;
+}
+
+.gate-overview {
+  margin-top: 12px;
+  border: 1px solid rgba(99, 140, 189, 0.28);
+  border-radius: 12px;
+  background: rgba(8, 16, 30, 0.62);
+  padding: 12px;
+}
+
+.gate-overview h4 {
+  margin: 0;
+  color: var(--green);
+}
+
+.gate-overview p {
+  margin: 6px 0 10px;
+  color: #a7c7e8;
+  font-size: 12px;
+}
+
+.capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cap {
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  background: rgba(11, 20, 37, 0.65);
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 12px;
+  color: #cfe6ff;
+}
+
+.gate-section {
+  transition: opacity 0.2s ease;
+}
+
+.gate-section.is-hidden {
+  display: none !important;
+}
+
+.gate-tag {
+  display: inline-block;
+  margin-left: 6px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  border: 1px solid rgba(99, 140, 189, 0.35);
+  color: #9fc3e6;
+}
+
+.quick-workbench h3,
+.card h3 {
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 14px;
+}
+
+.gateway-card,
+.cards-card {
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(8, 16, 30, 0.48);
+}
+
+.gateway-card h4,
+.cards-card h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #dff2ff;
+}
+
+.input-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#cardsInput {
+  min-height: 170px;
+  font-family: "Consolas", monospace;
+  line-height: 1.45;
+}
+
+.result-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.result-tab {
+  border: 1px solid rgba(99, 140, 189, 0.35);
+  border-radius: 10px;
+  background: rgba(12, 20, 38, 0.68);
+  color: #cfe6ff;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.result-tab.active {
+  border-color: rgba(74, 222, 128, 0.65);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.22) inset;
+}
+
+.result-pane {
+  display: none;
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  border-radius: 12px;
+  background: rgba(9, 19, 35, 0.52);
+  padding: 10px;
+}
+
+.result-pane.active {
+  display: block;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.result-split {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.result-column {
+  border: 1px solid rgba(99, 140, 189, 0.28);
+  border-radius: 12px;
+  background: rgba(9, 19, 35, 0.52);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.result-column h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #cfe6ff;
+}
+
+.result-column pre {
+  flex: 1;
+  min-height: 240px;
+  max-height: none;
+}
+
+.entry-compact {
+  padding: 12px;
+}
+
+.entry-compact h3 {
+  margin-bottom: 6px;
+}
+
+.entry-compact .card-subtitle {
+  margin: 0 0 8px;
+}
+
+.entry-compact .group {
+  margin-bottom: 8px;
+}
+
+.entry-compact label {
+  margin-bottom: 3px;
+}
+
+.entry-compact input,
+.entry-compact select,
+.entry-compact textarea {
+  padding: 8px;
+}
+
+.entry-compact .actions {
+  gap: 8px;
+}
+
+.entry-compact .input-hint {
+  margin-top: 5px;
+}
+
+.entry-compact #sampleCookie {
+  min-height: 95px;
+}
+
+.entry-compact #cardsInputAmazon {
+  min-height: 95px;
+}
+
+.entry-compact #cookieGeneratedInline {
+  min-height: 95px;
+  font-family: "Consolas", monospace;
+}
+
+.cookie-generate-status {
+  display: none;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #9fc3e6;
+  align-items: center;
+  gap: 8px;
+}
+
+.cookie-generate-status.is-visible {
+  display: inline-flex;
+}
+
+.cookie-generate-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #63c7ff;
+}
+
+.cookie-generate-status.is-generating .dot {
+  animation: cookiePulse 0.9s infinite ease-in-out;
+}
+
+.cookie-generate-status.is-done {
+  color: #4ade80;
+}
+
+.cookie-generate-status.is-done .dot {
+  background: #4ade80;
+}
+
+.mini-generator {
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  border-radius: 12px;
+  background: rgba(9, 19, 35, 0.52);
+  padding: 10px;
+}
+
+.mini-generator h4 {
+  margin: 0 0 8px;
+  color: #b2f4cc;
+  font-size: 13px;
+}
+
+.mini-generator-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mini-generator-grid .span-2 {
+  grid-column: span 2;
+}
+
+.mini-generator-output {
+  margin-top: 8px;
+}
+
+.mini-generator-options {
+  grid-column: span 2;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 12px;
+  color: #b8d6f0;
+}
+
+.mini-generator-options label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mini-generator-output pre {
+  min-height: 140px;
+  max-height: 220px;
+}
+
+@keyframes cookiePulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.45; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+.sample-analysis {
+  margin: 6px 0 8px;
+  border: 1px solid rgba(99, 140, 189, 0.25);
+  border-radius: 10px;
+  padding: 6px 8px;
+  background: rgba(8, 16, 30, 0.42);
+}
+
+.sample-analysis summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #a7c7e8;
+}
+
+.sample-analysis pre {
+  min-height: 60px;
+  max-height: 160px;
+  margin-top: 8px;
+}
+
+#state,
+#walletAssocResult,
+#verifierStatus {
+  min-height: 210px;
+  max-height: 360px;
+}
+
+#queueStatus,
+#liveLogs {
+  min-height: 160px;
+}
+
+@media (max-width: 980px) {
+  .gates { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .controls { grid-template-columns: repeat(2, 1fr); }
+  .content { grid-template-columns: 1fr; }
+  .results { grid-template-columns: 1fr; }
+  .quick-guide { grid-template-columns: 1fr; }
+  .capabilities { grid-template-columns: 1fr; }
+  .workbench-grid { grid-template-columns: 1fr; }
+  .result-tabs { grid-template-columns: 1fr; }
+  .result-split { grid-template-columns: 1fr; }
+  .menu-controls { grid-template-columns: 1fr; }
+  .mini-generator-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mini-generator-grid .span-2 { grid-column: span 2; }
+}
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel header">
+      <div class="top">
+        <div class="title">Elite Signal Chk</div>
+        <div class="chips">
+          <div class="role-switch">
+            <button type="button" class="role-btn active" id="viewUserBtn" onclick="setRoleView('user')">Vista Usuario</button>
+            <button type="button" class="role-btn" id="viewAdminBtn" onclick="setRoleView('admin')">Vista Admin</button>
+          </div>
+          <div class="chip" id="roleChip">VIEW: USER</div>
+          <div class="chip" id="modeChip" data-role="admin">MODE: Elite Amazon</div>
+          <div class="chip" id="apiChip" data-role="admin" style="display:none;">API: --</div>
+          <div class="chip" id="bridgeChip" data-role="admin" style="display:none;">BRIDGE: --</div>
+        </div>
+      </div>
+
+      <div class="menu-shell" data-role="user">
+        <div class="menu-row">
+          <span class="menu-title">Modo de trabajo</span>
+          <button type="button" class="flow-btn active" id="flowAmazonBtn" onclick="setFlowMode('amazon-cookies')">Amazon Cookies</button>
+          <button type="button" class="flow-btn" id="flowGateBtn" onclick="setFlowMode('gate-auth')">Gate Auth</button>
+        </div>
+        <div class="menu-controls" data-flow="gate-auth">
+          <select id="publicGateSelect">
+            <option value="amazon">Stripe Gate (Amazon)</option>
+            <option value="paypal">PayPal Gate</option>
+            <option value="fwgates">Braintree Gate</option>
+          </select>
+          <button type="button" class="btn-clear" onclick="connectGateApi()">Conectar Gate</button>
+          <span class="menu-badge" style="display:none;">Gate Auth conectado a backend local: 5050</span>
+        </div>
+      </div>
+
+      <div class="section-title" data-role="admin">Choose Elite Signal Gateway</div>
+      <div class="gates" data-role="admin">
+        <article class="gate active" id="gate-amazon" onclick="selectGate('amazon')">
+          <h4>Elite Stripe Auth Gate</h4>
+          <p>Flujo de validacion cookie + wallet con motor principal Stripe Auth.</p>
+          <div class="mini-status" id="gateStatusAmazon">Active</div>
+        </article>
+        <article class="gate" id="gate-paypal" onclick="selectGate('paypal')">
+          <h4>Elite PayPal Auth Gate</h4>
+          <p>Autorizacion con politicas de riesgo usando Braintree Auth.</p>
+          <div class="mini-status" id="gateStatusPaypal">Standby</div>
+        </article>
+        <article class="gate" id="gate-fwgates" onclick="selectGate('fwgates')">
+          <h4>Elite Braintree Auth Pro</h4>
+          <p>Escenarios avanzados de colas y verificacion con Braintree Auth.</p>
+          <div class="mini-status" id="gateStatusFwgates">Standby</div>
+        </article>
+      </div>
+
+      <div class="progress-block" data-role="admin">
+        <div class="progress-line">
+          <div class="progress-fill" id="progressFill"></div>
+          <span id="processStatus">Ready</span>
+          <span id="progressCounter">0 / 0</span>
+        </div>
+      </div>
+
+      <div class="quick-guide" data-role="admin">
+        <div class="guide-step">
+          <b>Paso 1</b>
+          <span>Selecciona el gate y aplica preset.</span>
+        </div>
+        <div class="guide-step">
+          <b>Paso 2</b>
+          <span>Configura owner/cookie/API segun el panel activo.</span>
+        </div>
+        <div class="guide-step">
+          <b>Paso 3</b>
+          <span>Ejecuta Start o Run 1 y revisa Queue + Live Logs.</span>
+        </div>
+      </div>
+
+      <div class="gate-overview" data-role="admin">
+        <h4 id="gateOverviewTitle">Elite Amazon Gateway: flujo completo</h4>
+        <p id="gateOverviewDesc">Incluye sesion, cookies, asociacion simulada y modulos de auth sandbox.</p>
+        <div class="capabilities" id="gateCapabilitiesList"></div>
+      </div>
+    </section>
+
+    <section class="stats" data-role="admin">
+      <article class="stat live panel"><div>APROBADAS</div><div class="value" id="liveStat">0</div><div class="label">CARDS</div></article>
+      <article class="stat dead panel"><div>REPROBADAS</div><div class="value" id="deadStat">0</div><div class="label">CARDS</div></article>
+      <article class="stat err panel"><div>ERROS</div><div class="value" id="errorStat">0</div><div class="label">CARDS</div></article>
+      <article class="stat spd panel"><div>VELOCIDAD</div><div class="value" id="speedStat">0</div><div class="label">CARDS/MIN</div></article>
+    </section>
+
+    <section class="controls" data-role="user">
+      <button class="btn-start" id="startBtn" onclick="startCardValidation()">Iniciar Validación</button>
+      <button class="btn-alt" onclick="trySingleAssociationNow()">Intentar Asociar</button>
+      <button class="btn-stop" id="stopBtn" onclick="stopCheckerLoop()">Detener</button>
+      <button class="btn-clear" onclick="clearLab()">Limpiar Sesion</button>
+    </section>
+
+    <section class="controls" data-role="admin">
+      <input id="batchSize" type="number" min="1" max="500" value="10" title="Batch size">
+      <input id="loopDelayMs" type="number" min="0" max="10000" step="100" value="500" title="Delay ms entre ciclos">
+      <button class="btn-clear" onclick="runBatchNow()">Generar Batch</button>
+      <button class="btn-alt" onclick="refreshSession()">Refrescar Sesion</button>
+    </section>
+
+    <section class="controls" data-role="admin">
+      <input id="autoGenIntervalMin" type="number" min="1" max="60" value="5" title="Intervalo auto-gen (minutos)" style="max-width: 100px;">
+      <span style="font-size: 0.85rem; opacity: 0.8;">min</span>
+      <button class="btn-start" id="autoGenBtn" onclick="toggleAutoGenerate()">Iniciar Auto-Gen</button>
+      <span id="autoGenStatus" style="font-size: 0.85rem; opacity: 0.7;">Auto-generacion detenida</span>
+    </section>
+
+    <section class="controls" data-role="admin">
+      <select id="gatePreset">
+        <option value="auto">Preset Auto (por gate)</option>
+        <option value="safe">Safe</option>
+        <option value="turbo">Turbo</option>
+      </select>
+      <button class="btn-clear" onclick="applyGatePreset()">Aplicar Preset</button>
+      <button class="btn-alt" onclick="clearLiveLogs()">Limpiar Logs</button>
+      <div></div>
+    </section>
+
+    <section class="panel card quick-workbench" data-role="user" data-flow="gate-auth">
+      <div class="workbench-grid">
+        <div class="cards-card" style="grid-column: 1 / -1;">
+          <div class="mini-generator" style="margin-top:8px;">
+            <h4>Generador de Tarjetas</h4>
+            <div class="mini-generator-grid">
+              <input id="demoCardBinLite" class="span-2" type="text" placeholder="Bin inserte">
+              <select id="demoCardMonthLite">
+                <option value="rnd">RND</option>
+                <option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option>
+                <option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option>
+                <option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+              </select>
+              <select id="demoCardYearLite">
+                <option value="rnd">RND</option>
+                <option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option>
+                <option value="2029">2029</option><option value="2030" selected>2030</option><option value="2031">2031</option>
+                <option value="2032">2032</option><option value="2033">2033</option><option value="2034">2034</option>
+              </select>
+              <input id="demoCardCountLite" type="number" min="1" max="50" value="10" placeholder="Cantidad">
+              <button class="btn-start" type="button" onclick="generateDemoCardsLite()">Generar</button>
+              <button class="btn-clear" type="button" onclick="clearDemoCardsLite()">Limpiar</button>
+            </div>
+          </div>
+          <h4 style="margin-top:10px;">Lista de Tarjetas CC|MES|ANO|CVV</h4>
+          <textarea id="cardsInput" spellcheck="false" placeholder="4147181431204002|06|2030|224&#10;4147181431204003|10|2029|515"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="content">
+      <article class="panel card entry-compact">
+
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="ownerUser">Owner User</label>
+          <input id="ownerUser" value="owner">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="ownerPass">Owner Password</label>
+          <input id="ownerPass" type="password" value="owner123">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="profileId">Profile ID</label>
+          <input id="profileId" value="mi_perfil">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="keyTtl">Key TTL (minutes)</label>
+          <input id="keyTtl" type="number" min="1" max="1440" value="30">
+        </div>
+
+        <div class="actions gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <button class="btn-start" onclick="ownerLogin()">Owner Login</button>
+          <button class="btn-alt" onclick="generateOwnerAccessKey()">Generate Key</button>
+        </div>
+
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="ownerAccessKey">Access Key</label>
+          <textarea id="ownerAccessKey" readonly spellcheck="false" placeholder="Generated key will appear here"></textarea>
+          <pre id="ownerStatus"></pre>
+        </div>
+
+        <div class="group gate-section" data-gates="amazon,fwgates" data-flow="amazon-cookies">
+          <div class="mini-generator" style="margin-top:8px;">
+            <h4>Generador de Tarjetas</h4>
+            <div class="mini-generator-grid">
+              <input id="demoCardBinAmazon" class="span-2" type="text" placeholder="Bin inserte">
+              <select id="demoCardMonthAmazon">
+                <option value="rnd">RND</option>
+                <option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option>
+                <option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option>
+                <option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+              </select>
+              <select id="demoCardYearAmazon">
+                <option value="rnd">RND</option>
+                <option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option>
+                <option value="2029">2029</option><option value="2030" selected>2030</option><option value="2031">2031</option>
+                <option value="2032">2032</option><option value="2033">2033</option><option value="2034">2034</option>
+              </select>
+              <input id="demoCardCountAmazon" type="number" min="1" max="50" value="10" placeholder="Cantidad">
+              <button class="btn-start" type="button" onclick="generateDemoCardsAmazon()">Generar</button>
+              <button class="btn-clear" type="button" onclick="clearDemoCardsAmazon()">Limpiar</button>
+            </div>
+          </div>
+          <label for="cardsInputAmazon" style="margin-top:8px;">Tarjetas para Validar (Amazon Cookies)</label>
+          <textarea id="cardsInputAmazon" spellcheck="false" placeholder="4147181431204002|06|2030|224&#10;4147181431204003|10|2029|515"></textarea>
+          <p class="input-hint">Pega aqui las tarjetas generadas para validar en modo Amazon.</p>
+        </div>
+
+        <div class="group gate-section" data-gates="amazon,fwgates" data-flow="amazon-cookies">
+          <label for="sampleCookie">Cookie Amazon (Pegar aquí si ya tienes una)</label>
+          <textarea id="sampleCookie" spellcheck="false" placeholder="Ejemplo: ubid-main=130-1428977-2448637;session-token=PCoNCzN...;i18n-prefs=USD;csm-hit=tb:...;session-id-time=2082787201l;id_pk=eyJuIjoiMSJ9;id_pkel=n1;lc-main=es_US;rxc=AH39...;session-id=138-8478272-4266640;skin=noskin"></textarea>
+        </div>
+
+        <div class="actions gate-section" data-gates="amazon,fwgates" data-flow="amazon-cookies">
+          <button class="btn-clear" onclick="analyzeSampleCookie()">Analyze Sample</button>
+          <button class="btn-stop" onclick="clearSampleProfile()">Clear Profile</button>
+        </div>
+
+        <div class="group gate-section" data-gates="amazon,fwgates" data-flow="amazon-cookies">
+          <label for="cookieGeneratedInline">Cookie Generada</label>
+          <textarea id="cookieGeneratedInline" readonly spellcheck="false" placeholder="Aqui se mostrara la cookie generada."></textarea>
+          <div id="cookieGenerateStatus" class="cookie-generate-status" aria-live="polite">
+            <span class="dot"></span>
+            <span id="cookieGenerateStatusText">Generando cookie...</span>
+          </div>
+        </div>
+
+        <pre id="profileResult" style="display:none;"></pre>
+
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="user" data-flow="amazon-cookies">
+          <label for="region">Region</label>
+          <select id="region">
+            <option value="MX">Mexico</option>
+            <option value="US" selected>Estados Unidos</option>
+            <option value="ES">Espana</option>
+            <option value="IT">Italia</option>
+            <option value="CA">Canada</option>
+          </select>
+        </div>
+
+
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="riskModeSelect">Risk Mode</label>
+          <select id="riskModeSelect">
+            <option value="balanced">Balanced (recomendado)</option>
+            <option value="strict">Strict (menos falsos positivos)</option>
+          </select>
+        </div>
+
+        <div class="group gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <label for="apiBackups">API Backups (comma separated)</label>
+          <input id="apiBackups" value="" placeholder="https://tu-api.com, https://backup-api.com">
+        </div>
+        <div class="actions gate-section" data-gates="amazon,paypal,fwgates" data-role="admin">
+          <button class="btn-clear" onclick="saveApiBackups()">Save API Backups</button>
+          <button class="btn-alt" onclick="testApiBackups()">Test API Backups</button>
+        </div>
+
+        <div class="actions gate-section" data-gates="amazon,fwgates" data-flow="amazon-cookies">
+          <button class="btn-start" onclick="runLab()">Generar Cookie</button>
+          <button class="btn-stop" onclick="unlinkSource()">Limpiar Cookie</button>
+        </div>
+
+        <div class="group gate-section" data-gates="amazon,paypal" style="margin-top:16px;" data-role="admin">
+          <label for="stripePublishableKey">Stripe Publishable Key (pk_test...)</label>
+          <input id="stripePublishableKey" placeholder="pk_test_...">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal" data-role="admin">
+          <label for="stripeAmount">Amount (e.g. 1.00)</label>
+          <input id="stripeAmount" type="number" min="0.5" step="0.01" value="1.00">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal" data-role="admin">
+          <label for="stripeCurrency">Currency</label>
+          <input id="stripeCurrency" value="usd">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal" data-role="admin">
+          <label for="stripeEmail">Billing Email</label>
+          <input id="stripeEmail" type="email" placeholder="test@example.com">
+        </div>
+        <div class="group gate-section" data-gates="amazon,paypal" data-role="admin">
+          <label>Card (Stripe Elements)</label>
+          <div id="stripeCardElement"></div>
+        </div>
+        <div class="actions three gate-section" data-gates="amazon,paypal" data-role="admin">
+          <button class="btn-clear" onclick="loadStripeConfigFromApi()">Load API Key</button>
+          <button class="btn-start" onclick="initStripeAuth()">Init Stripe</button>
+          <button class="btn-alt" onclick="runStripeAuth()">Stripe Auth</button>
+        </div>
+        <pre id="stripeStatus" class="gate-section" data-gates="amazon,paypal" data-role="admin"></pre>
+
+        <div class="group gate-section" data-gates="paypal,fwgates" style="margin-top:16px;" data-role="admin">
+          <label>Braintree (Sandbox)</label>
+          <div id="btDropin"></div>
+        </div>
+        <div class="actions gate-section" data-gates="paypal,fwgates" data-role="admin">
+          <button class="btn-start" onclick="initBraintreeAuth()">Init Braintree</button>
+          <button class="btn-alt" onclick="runBraintreeAuth()">Braintree Auth</button>
+        </div>
+        <pre id="braintreeStatus" class="gate-section" data-gates="paypal,fwgates" data-role="admin"></pre>
+      </article>
+
+      <div class="stack">
+      <article class="panel card result-card">
+        <h3>Validation Results</h3>
+        <p class="card-subtitle">Results are split by status: Live, Dead or Error.</p>
+
+        <div class="result-split">
+          <section class="result-column">
+            <h4>Live (<span id="resultTabLiveCount">0</span>)</h4>
+            <pre id="state"></pre>
+          </section>
+          <section class="result-column">
+            <h4>Dead (<span id="resultTabDeadCount">0</span>)</h4>
+            <pre id="walletAssocResult"></pre>
+          </section>
+          <section class="result-column">
+            <h4>Error (<span id="resultTabErrCount">0</span>)</h4>
+            <pre id="verifierStatus"></pre>
+          </section>
+        </div>
+
+      </article>
+
+      </div>
+    </section>
+
+    <div style="display:none;">
+      <pre id="stateRaw"></pre>
+      <pre id="cookies"></pre>
+      <pre id="history"></pre>
+    </div>
+  </main>
+
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="https://js.braintreegateway.com/web/dropin/1.45.2/js/dropin.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

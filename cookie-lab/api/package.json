@@ -1,0 +1,13 @@
+{
+  "name": "cookie-lab-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "braintree": "^3.31.0",
+    "stripe": "^18.5.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
